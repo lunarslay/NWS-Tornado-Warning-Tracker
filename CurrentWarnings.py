@@ -1,27 +1,62 @@
 import requests
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 class TornadoWarningDisplay(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
         self.config(bg="#2b2b2b")
         self.pack(fill=tk.BOTH, expand=True)
-        self.timezone = timezone(timedelta(hours=-5))  #CHANGE THIS TO YOUR DESIRED TIMEZONE
+        self.theme_mode = tk.StringVar(value="System")  
+        self.set_theme_mode(self.theme_mode.get()) 
+        self.timezone = self.get_system_timezone()
         self.create_widgets()
 
     def create_widgets(self):
-        self.warning_listbox = tk.Listbox(self, bg="#2b2b2b", fg="white", bd=1, relief=tk.SOLID, selectbackground="#d9d9d9", selectforeground="white")
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
+
+        
+        self.warnings_tab = tk.Frame(self.notebook, bg="#2b2b2b")
+        self.notebook.add(self.warnings_tab, text="Warnings")
+
+        self.warning_listbox = tk.Listbox(self.warnings_tab, bg="#2b2b2b", fg="white", bd=1, relief=tk.SOLID, selectbackground="#d9d9d9", selectforeground="white")
         self.warning_listbox.pack(fill=tk.BOTH, expand=True)
         self.warning_listbox.bind("<Double-1>", self.on_warning_double_click)
 
-    def add_warning(self, issuance_time_str, description):
+       
+        self.options_tab = tk.Frame(self.notebook, bg="#2b2b2b")
+        self.notebook.add(self.options_tab, text="Options")
+
+       
+        self.show_severe_thunderstorm = tk.BooleanVar()
+        self.show_tornado_warning = tk.BooleanVar()
+        self.show_tornado_watch = tk.BooleanVar()
+        self.show_flash_flood = tk.BooleanVar()
+        self.show_weather_statement = tk.BooleanVar()
+
+        self.severe_thunderstorm_check = tk.Checkbutton(self.options_tab, text="Severe Thunderstorm", variable=self.show_severe_thunderstorm, bg="#2b2b2b", fg="white", selectcolor="#2b2b2b", command=self.update_warnings)
+        self.severe_thunderstorm_check.pack(anchor=tk.W)
+
+        self.tornado_warning_check = tk.Checkbutton(self.options_tab, text="Tornado Warning", variable=self.show_tornado_warning, bg="#2b2b2b", fg="white", selectcolor="#2b2b2b", command=self.update_warnings)
+        self.tornado_warning_check.pack(anchor=tk.W)
+
+        self.tornado_watch_check = tk.Checkbutton(self.options_tab, text="Tornado Watch", variable=self.show_tornado_watch, bg="#2b2b2b", fg="white", selectcolor="#2b2b2b", command=self.update_warnings)
+        self.tornado_watch_check.pack(anchor=tk.W)
+
+        self.flash_flood_check = tk.Checkbutton(self.options_tab, text="Flash Flood", variable=self.show_flash_flood, bg="#2b2b2b", fg="white", selectcolor="#2b2b2b", command=self.update_warnings)
+        self.flash_flood_check.pack(anchor=tk.W)
+
+        self.weather_statement_check = tk.Checkbutton(self.options_tab, text="Weather Statement", variable=self.show_weather_statement, bg="#2b2b2b", fg="white", selectcolor="#2b2b2b", command=self.update_warnings)
+        self.weather_statement_check.pack(anchor=tk.W)
+
+    def add_warning(self, issuance_time_str, event):
         issuance_time_utc = datetime.fromisoformat(issuance_time_str)
         issuance_time = issuance_time_utc.astimezone(self.timezone)
-        formatted_issuance_time = issuance_time.strftime("%Y-%m-%d %I:%M:%S %p") + " EST"  #CHANGE THIS TO YOUR DESIRED TIMEZONE ABBREVIATION
-        self.warning_listbox.insert(tk.END, f"Tornado Warning For: {formatted_issuance_time}")
+        formatted_issuance_time = issuance_time.strftime("%Y-%m-%d %I:%M %p")  
+        self.warning_listbox.insert(tk.END, f"{event}: {formatted_issuance_time}")
         self.warning_listbox.itemconfig(tk.END, fg="white")
         self.warning_listbox.update()
 
@@ -37,42 +72,59 @@ class TornadoWarningDisplay(tk.Frame):
             details_text = ScrolledText(details_frame, wrap=tk.WORD, bg="#2b2b2b", fg="white", padx=10, pady=10, bd=1, relief=tk.SOLID)
             details_text.pack(fill=tk.BOTH, expand=True)
             selected_warning = self.warning_listbox.get(index)
-            issuance_time = selected_warning.split(": ")[1]
+            event, issuance_time = selected_warning.split(": ")
+            details_text.insert(tk.END, f"Event: {event}\n")
             details_text.insert(tk.END, f"Issuance Time: {issuance_time}\n\n")
             details_text.insert(tk.END, f"Details: {warning_details[index]}")
 
+    def get_system_timezone(self):
+        return datetime.now().astimezone().tzinfo
+
+    def set_theme_mode(self, mode):
+        if mode == "Light":
+            self.master.config(bg="white")
+            self.warning_listbox.config(bg="white", fg="black")
+        elif mode == "Dark":
+            self.master.config(bg="#2b2b2b")
+            self.warning_listbox.config(bg="#2b2b2b", fg="white")
+        elif mode == "System":
+            pass  
+
     def change_time_zone(self):
-        self.timezone = timezone(timedelta(hours=-5))  #CHANGE THIS TO YOUR DESIRED TIMEZONE
-        self.timezone_abbr = "EST" #this is a optional change but i reccomend it
+        self.timezone = self.get_system_timezone()
 
-        for index in range(self.warning_listbox.size()):
-            warning = self.warning_listbox.get(index)
-            issuance_time = warning.split(": ")[1]
-            self.warning_listbox.delete(index)
-            self.add_warning(issuance_time, warning.split(": ")[2])
+    def change_theme_mode(self):
+        selected_mode = self.theme_mode.get()
+        self.set_theme_mode(selected_mode)
 
-def check_tornado_warnings(root, tornado_warning_display):
-    url = "https://api.weather.gov/alerts/active"
-    headers = {"User-Agent": "Python Weather Alerts"}
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        alerts = response.json().get("features", [])
+    def update_warnings(self):
+        print("Updating warnings...")
        
-        tornado_warning_display.warning_listbox.delete(0, tk.END)
+        self.warning_listbox.delete(0, tk.END)
         warning_details.clear()
-        for alert in alerts:
-            event = alert["properties"]["event"]
-            if event == "Tornado Warning":
+
+       
+        url = "https://api.weather.gov/alerts/active"
+        headers = {"User-Agent": "Python Weather Alerts"}
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            alerts = response.json().get("features", [])
+            print(f"Received {len(alerts)} alerts.")
+            for alert in alerts:
+                event = alert["properties"]["event"]
+                print(f"Event: {event}")
                 issuance_time_str = alert["properties"]["sent"]
                 description = alert["properties"]["description"]
-                if description not in warning_details:
-                    tornado_warning_display.add_warning(issuance_time_str, description)
+                if (event == "Severe Thunderstorm Warning" and self.show_severe_thunderstorm.get()) or \
+                   (event == "Tornado Warning" and self.show_tornado_warning.get()) or \
+                   (event == "Tornado Watch" and self.show_tornado_watch.get()) or \
+                   (event == "Flash Flood Warning" and self.show_flash_flood.get()) or \
+                   (event == "Special Weather Statement" and self.show_weather_statement.get()):
+                    self.add_warning(issuance_time_str, event)
                     warning_details.append(description)
-    else:
-        messagebox.showerror("Error", "Failed to fetch weather alerts.")
-
-    root.after(300000, lambda: check_tornado_warnings(root, tornado_warning_display))
+        else:
+            messagebox.showerror("Error", "Failed to fetch weather alerts.")
 
 root = tk.Tk()
 root.title("Tornado Warnings")
@@ -84,11 +136,17 @@ tornado_warning_display.change_time_zone()
 
 warning_details = []
 
-check_tornado_warnings(root, tornado_warning_display)
-
 menubar = tk.Menu(root)
 options_menu = tk.Menu(menubar, tearoff=0)
+
+theme_menu = tk.Menu(options_menu, tearoff=0)
+theme_menu.add_radiobutton(label="Light", variable=tornado_warning_display.theme_mode, value="Light", command=tornado_warning_display.change_theme_mode)
+theme_menu.add_radiobutton(label="Dark", variable=tornado_warning_display.theme_mode, value="Dark", command=tornado_warning_display.change_theme_mode)
+theme_menu.add_radiobutton(label="System", variable=tornado_warning_display.theme_mode, value="System", command=tornado_warning_display.change_theme_mode)
+
+options_menu.add_cascade(label="Theme", menu=theme_menu)
 options_menu.add_command(label="Change Time Zone", command=tornado_warning_display.change_time_zone)
+
 menubar.add_cascade(label="Options", menu=options_menu)
 root.config(menu=menubar)
 
